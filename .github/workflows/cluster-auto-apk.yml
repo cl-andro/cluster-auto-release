@@ -1,0 +1,104 @@
+name: Build & Release Cluster Auto APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_notes:
+        description: 'Release Notes (optional)'
+        required: false
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          repository: 'cl-andro/cluster-auto'
+          ref: 'main'
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'zulu'
+          cache: 'gradle'
+
+      - name: Calculate Next Version Tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Fetch the latest release tag using GitHub CLI
+          LATEST_TAG=$(gh release view --json tagName --template '{{.tagName}}' 2>/dev/null || echo "v1.0")
+          echo "Latest tag found: $LATEST_TAG"
+          
+          # Strip the leading 'v'
+          VERSION=${LATEST_TAG#v}
+          
+          # Parse Major and Minor numbers
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          
+          if [ -z "$MINOR" ]; then MINOR=0; fi
+          
+          # Increment minor version
+          MINOR=$((MINOR + 1))
+          
+          # Rollover logic (e.g., v1.9 -> v2.0)
+          if [ "$MINOR" -ge 10 ]; then
+            MINOR=0
+            MAJOR=$((MAJOR + 1))
+          fi
+          
+          NEXT_TAG="v$MAJOR.$MINOR"
+          echo "Calculated next tag: $NEXT_TAG"
+          
+          # Save variables to environment
+          echo "NEXT_TAG=$NEXT_TAG" >> $GITHUB_ENV
+          echo "APK_NAME=cluster-auto-$NEXT_TAG.apk" >> $GITHUB_ENV
+
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > cluster_family.jks
+
+      - name: Create signing.properties
+        run: |
+          cat > signing.properties <<EOF
+          KEYSTORE_FILE=../cluster_family.jks
+          KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}
+          KEYSTORE_ALIAS=${{ secrets.KEY_ALIAS }}
+          KEYSTORE_ALIAS_PASSWORD=${{ secrets.KEY_PASSWORD }}
+          EOF
+
+      - name: Grant Execute Permission to Gradlew
+        run: chmod +x gradlew
+
+      - name: Build Release APK
+        run: |
+          ./gradlew :manager:assembleRelease
+
+      - name: Rename Output APK
+        run: |
+          APK_PATH=$(find out/apk/ -name "*.apk" | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            APK_PATH=$(find manager/build/outputs/apk/release/ -name "*.apk" | head -n 1)
+          fi
+          cp "$APK_PATH" "$APK_NAME"
+          echo "Prepared APK: $APK_NAME"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.NEXT_TAG }}
+          name: "Release ${{ env.NEXT_TAG }}"
+          body: ${{ inputs.release_notes }}
+          files: ${{ env.APK_NAME }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
