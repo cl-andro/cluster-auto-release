@@ -42,7 +42,7 @@ The following applications are automatically pre-authorized to connect to the da
 2. Open a terminal on your computer.
 3. Run the following command:
    ```bash
-   adb shell $(pm path com.zk.clAuto | cut -d: -f2 | sed 's/base.apk/lib\/arm64\/libshizuku.so/')
+   adb shell $(pm path com.zk.clAuto | cut -d: -f2 | sed 's/base.apk/lib\/arm64\/libclauto.so/')
    ```
 
 ---
