@@ -81,6 +81,9 @@ jobs:
       - name: Build Release APK
         run: |
           ./gradlew :manager:assembleRelease
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPR_READ_TOKEN: ${{ secrets.GPR_READ_TOKEN }}
 
       - name: Rename Output APK
         run: |
