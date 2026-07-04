@@ -60,6 +60,7 @@ jobs:
           
           # Save variables to environment
           echo "NEXT_TAG=$NEXT_TAG" >> $GITHUB_ENV
+          echo "NEXT_VERSION=$MAJOR.$MINOR" >> $GITHUB_ENV
           echo "APK_NAME=cluster-auto-$NEXT_TAG.apk" >> $GITHUB_ENV
 
       - name: Decode Keystore
@@ -80,7 +81,7 @@ jobs:
 
       - name: Build Release APK
         run: |
-          ./gradlew :manager:assembleRelease
+          ./gradlew :manager:assembleRelease -PversionName=${{ env.NEXT_VERSION }} -PversionCode=${{ github.run_number }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GPR_READ_TOKEN: ${{ secrets.GPR_READ_TOKEN }}
